@@ -27,6 +27,14 @@ TEMPERATURE_SENSORS = frozenset(s for s in ALL_SENSORS if s.startswith("T-"))
 VALVE_STATE_SENSORS = frozenset(s for s in ALL_SENSORS if s.startswith("ESTADO-"))
 
 
+# dataset.ini declares every pressure in Pa, but all 20 hand-drawn instances store
+# pressures in bar (medians ~20-420, vs ~1e6-1e7 Pa in every real and simulated
+# instance; audit: 60 of 60 drawn instance-pressures are bar-scale, 0 of 4,071
+# simulated). data.load_instance multiplies drawn pressures by this factor.
+# (bar vs kgf/cm2 differ by 2%; features are scale-normalised, so that is immaterial.)
+DRAWN_PRESSURE_TO_PA = 1.0e5
+
+
 def plausible_range(sensor: str) -> tuple[float, float]:
     """Generous physical bounds. Anything outside is a historian fill value, not a
     measurement: the audit found P-PDG = 1.18e42 Pa and T-PDG = 1.7e38 degC in

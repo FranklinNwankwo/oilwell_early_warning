@@ -74,6 +74,15 @@ Event-vs-normal classifiers that see ONLY per-instance sensor-health fractions (
 
 Missingness identifies the WELL, and the well identifies the label: with a random split the shortcut is near-perfect. Grouped by well it still partly transfers, so the grouped random-forest score is the health-only baseline every model must beat.
 
+## Pressure units by source
+Median raw magnitude of non-zero P-TPT / P-MON-CKP / P-PDG per instance. dataset.ini declares Pa; hand-drawn instances are bar-scale and are converted x1e5 at load time.
+
+| source    |   < 1e3 (bar) |   >= 1e5 (Pa) |
+|:----------|--------------:|--------------:|
+| drawn     |            20 |             0 |
+| real      |             0 |          1062 |
+| simulated |             0 |          1089 |
+
 ## Invalid (physically implausible) values, fraction of real samples
 |           |   invalid_fraction |
 |:----------|-------------------:|

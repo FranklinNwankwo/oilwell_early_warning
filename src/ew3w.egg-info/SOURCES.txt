@@ -3,6 +3,7 @@ pyproject.toml
 src/ew3w/__init__.py
 src/ew3w/alerting.py
 src/ew3w/data.py
+src/ew3w/features.py
 src/ew3w/metrics.py
 src/ew3w/quality.py
 src/ew3w/schema.py
@@ -13,4 +14,5 @@ src/ew3w.egg-info/dependency_links.txt
 src/ew3w.egg-info/requires.txt
 src/ew3w.egg-info/top_level.txt
 tests/test_core.py
+tests/test_features.py
 tests/test_real_data.py

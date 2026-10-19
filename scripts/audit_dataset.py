@@ -47,6 +47,10 @@ def instance_stats(meta) -> dict:
         normal_before_onset_s=int(onset - first_lab) if (onset is not None and first_lab is not None) else 0,
         states=",".join(map(str, sorted(set(df["state"].dropna().astype(int))))),
     )
+    # Raw (unconverted) pressure magnitude, to audit units per source.
+    raw = pd.read_parquet(meta.path, columns=["P-TPT", "P-MON-CKP", "P-PDG"]).to_numpy(dtype=np.float64)
+    raw = np.abs(raw[np.isfinite(raw) & (raw != 0)])
+    row["raw_pressure_median"] = float(np.median(raw)) if raw.size else np.nan
     for s in ALL_SENSORS:
         row[f"ok_{s}"] = float((h[s] == Health.OK).mean())
         row[f"frozen_{s}"] = float((h[s] == Health.FROZEN).mean())
@@ -173,6 +177,13 @@ def main() -> None:
         "Missingness identifies the WELL, and the well identifies the label: with a random split "
         "the shortcut is near-perfect. Grouped by well it still partly transfers, so the grouped "
         "random-forest score is the health-only baseline every model must beat.",
+        "",
+        "## Pressure units by source",
+        "Median raw magnitude of non-zero P-TPT / P-MON-CKP / P-PDG per instance. dataset.ini "
+        "declares Pa; hand-drawn instances are bar-scale and are converted x1e5 at load time.",
+        "",
+        cat.assign(band=pd.cut(cat.raw_pressure_median, [0, 1e3, 1e5, np.inf], labels=["< 1e3 (bar)", "1e3-1e5", ">= 1e5 (Pa)"]))
+        .pipe(lambda d: pd.crosstab(d.source, d.band)).to_markdown(),
         "",
         "## Invalid (physically implausible) values, fraction of real samples",
         cat[cat.source == "real"][[f"invalid_{s}" for s in ALL_SENSORS]].mean().pipe(lambda s: s[s > 0])

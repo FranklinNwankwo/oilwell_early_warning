@@ -41,8 +41,11 @@ class HysteresisConfig:
     off_threshold: float = 0.5
     on_delay_s: int = 60
     off_delay_s: int = 300
+    period_s: int = SAMPLE_PERIOD_S  # seconds between scores: 1 for raw 1 Hz, FeatureConfig.block_s for features
 
     def __post_init__(self) -> None:
+        if self.period_s <= 0:
+            raise ValueError("period_s must be > 0")
         # Scores are NOT assumed to be probabilities: the z-score and isolation-forest
         # baselines produce unbounded scores, so only the dead-band ordering is enforced.
         if not (math.isfinite(self.on_threshold) and math.isfinite(self.off_threshold)):
@@ -54,11 +57,13 @@ class HysteresisConfig:
 
     @property
     def on_steps(self) -> int:
-        return max(1, int(round(self.on_delay_s / SAMPLE_PERIOD_S)))
+        """Consecutive scores >= on_threshold needed to raise."""
+        return max(1, int(round(self.on_delay_s / self.period_s)))
 
     @property
     def off_steps(self) -> int:
-        return max(1, int(round(self.off_delay_s / SAMPLE_PERIOD_S)))
+        """Consecutive scores <= off_threshold needed to clear."""
+        return max(1, int(round(self.off_delay_s / self.period_s)))
 
 
 @dataclass

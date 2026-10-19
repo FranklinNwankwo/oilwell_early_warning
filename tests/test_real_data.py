@@ -64,8 +64,33 @@ def test_normal_exposure_and_no_alarms_with_zero_score(metas):
     assert round(days, 1) == 116.0
 
 
+def test_drawn_pressures_converted_to_pa(metas):
+    for m in [m for m in metas if m.source == "drawn"]:
+        p = load_instance(m, ["P-TPT"])["P-TPT"].to_numpy(dtype=float)
+        assert 1e5 < np.nanmedian(p) < 1e8, m.instance_id  # Pa-scale, like real and simulated
+
+
 def test_fill_values_flagged_invalid(metas):
     m = next(m for m in metas if m.instance_id == "7/WELL-00006_20180620152903")
     df = load_instance(m, ["P-PDG"])
     h = health_matrix(df, ["P-PDG"], segment_col=None)
     assert (h["P-PDG"] == Health.INVALID).mean() > 0.99
+
+
+def test_features_on_real_and_synthetic(metas):
+    from ew3w.features import FeatureConfig, build_features
+    from ew3w.schema import SHARED_SENSORS
+
+    cfg = FeatureConfig()
+    well = [m for m in metas if m.well == "WELL-00019"]  # 1 normal + 4 hydrate instances
+    f = build_features(stitch_well(well, list(SHARED_SENSORS)), cfg, detect_frozen=True)
+    x = f[cfg.feature_names()].to_numpy(dtype=float)
+    assert not np.isinf(x).any()
+    assert set(np.unique(f["class"].dropna())) <= {0.0, 8.0, 108.0}
+    assert (f["n_ok"].between(0, 5)).all()
+    health = f[[f"{s}__health" for s in SHARED_SENSORS]].to_numpy()
+    assert np.array_equal((health == 0).sum(axis=1), f["n_ok"].to_numpy())
+    for src in ("simulated", "drawn"):
+        m = next(m for m in metas if m.source == src)
+        g = build_features(load_instance(m, list(SHARED_SENSORS)), cfg, detect_frozen=False)
+        assert len(g) > 0 and not np.isinf(g[cfg.feature_names()].to_numpy(dtype=float)).any()

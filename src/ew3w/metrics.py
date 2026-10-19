@@ -75,7 +75,9 @@ def evaluate_event_instance(
     source: str = "real",
     grace_s: float = 600.0,
     segments: np.ndarray | None = None,
+    period_s: float = SAMPLE_PERIOD_S,
 ) -> EventOutcome:
+    """Score one event instance. period_s = seconds per row (1 raw, 10 for features)."""
     t_s = np.asarray(t_s, dtype=np.float64)
     labels = np.asarray(labels, dtype=np.float64)
     active = np.asarray(active, dtype=bool)
@@ -98,7 +100,7 @@ def evaluate_event_instance(
     if ev_idx.size and np.any(np.diff(ev_idx) > 1):
         raise ValueError(f"{instance_id}: event labels form more than one contiguous run; pass one instance")
     i_end = int(ev_idx[-1]) + 1
-    t_end = t_s[i_end - 1] + SAMPLE_PERIOD_S
+    t_end = t_s[i_end - 1] + period_s
     censored = i_ss is None
     t_est = np.nan if censored else t_s[i_ss]
 
@@ -158,10 +160,17 @@ class FalseAlarmCounts:
 
 
 def count_false_alarms(
-    labels: np.ndarray, state: np.ndarray, active: np.ndarray, *, well: str | None = None, segments: np.ndarray | None = None
+    labels: np.ndarray,
+    state: np.ndarray,
+    active: np.ndarray,
+    *,
+    well: str | None = None,
+    segments: np.ndarray | None = None,
+    period_s: float = SAMPLE_PERIOD_S,
 ) -> FalseAlarmCounts:
     """For a NORMAL-instance timeline. Only class-0 samples count as exposure; an
-    episode counts if it STARTS on a class-0 sample (unlabeled lead-in is ignored)."""
+    episode counts if it STARTS on a class-0 sample (unlabeled lead-in is ignored).
+    Each row stands for period_s seconds of exposure (1 for raw data, 10 for feature rows)."""
     labels = np.asarray(labels, dtype=np.float64)
     state = np.asarray(state, dtype=np.float64)
     active = np.asarray(active, dtype=bool)
@@ -179,9 +188,9 @@ def count_false_alarms(
         well=well,
         episodes_open=e_open,
         episodes_not_open=e_not,
-        exposure_open_s=float((normal & is_open).sum() * SAMPLE_PERIOD_S),
-        exposure_not_open_s=float((normal & ~is_open).sum() * SAMPLE_PERIOD_S),
-        time_in_alarm_s=float((normal & active).sum() * SAMPLE_PERIOD_S),
+        exposure_open_s=float((normal & is_open).sum() * period_s),
+        exposure_not_open_s=float((normal & ~is_open).sum() * period_s),
+        time_in_alarm_s=float((normal & active).sum() * period_s),
     )
 
 

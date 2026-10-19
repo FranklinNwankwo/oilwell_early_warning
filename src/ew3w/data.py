@@ -19,7 +19,14 @@ from typing import Iterable, Iterator, Sequence
 import numpy as np
 import pandas as pd
 
-from .schema import ALL_SENSORS, SAMPLE_PERIOD_S, plausible_range, source_from_stem
+from .schema import (
+    ALL_SENSORS,
+    DRAWN_PRESSURE_TO_PA,
+    PRESSURE_SENSORS,
+    SAMPLE_PERIOD_S,
+    plausible_range,
+    source_from_stem,
+)
 
 
 @dataclass(frozen=True)
@@ -89,13 +96,17 @@ def load_instance(meta: InstanceMeta, sensors: Sequence[str] | None = None) -> p
 
     The index is a tz-naive DatetimeIndex named 'timestamp'. Sensors that the source
     never recorded stay as all-NaN columns, so every frame has the same schema.
+    Units are harmonised here: hand-drawn pressures are converted from bar to Pa.
     """
     sensors = list(ALL_SENSORS if sensors is None else sensors)
     df = pd.read_parquet(meta.path, columns=[*sensors, "class", "state"])
-    df.index = pd.DatetimeIndex(pd.to_datetime(df.index), name="timestamp")
+    # Normalise to ns so every frame in the project has the same timestamp resolution.
+    df.index = pd.DatetimeIndex(pd.to_datetime(df.index), name="timestamp").as_unit("ns")
     out = pd.DataFrame(index=df.index)
     for s in sensors:
         x = df[s].to_numpy(dtype=np.float64)
+        if meta.source == "drawn" and s in PRESSURE_SENSORS:
+            x = x * DRAWN_PRESSURE_TO_PA  # hand-drawn pressures are in bar (see schema.py)
         lo, hi = plausible_range(s)
         # Implausible values become +inf: survives the float32 cast, and quality.py
         # reports it as INVALID (distinct from MISSING = NaN).
