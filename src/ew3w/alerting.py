@@ -116,14 +116,47 @@ class HysteresisAlerter:
         out = np.empty(n, dtype=np.int8)
         if deg.shape != scores.shape or seg.shape != scores.shape:
             raise ValueError("scores, degraded and segments must have identical shapes")
-        self.reset()
-        sc, dg, sg = scores.tolist(), deg.tolist(), seg.tolist()  # python scalars: fast loop
+        # Inlined copy of step() with local variables: ~5x faster, which matters for
+        # threshold sweeps over millions of rows. tests/test_core.py checks it against
+        # step() on random scores with NaNs, degraded flags and segment breaks.
+        c = self.cfg
+        on_t, off_t, on_n, off_n = c.on_threshold, c.off_threshold, c.on_steps, c.off_steps
+        S_NORMAL, S_PENDING, S_ALERT, S_CLEARING, S_DEGRADED = 0, 1, 2, 3, 4
+        sc, dg, sg = scores.tolist(), deg.tolist(), seg.tolist()
+        isfinite = math.isfinite
+        active, above, below = False, 0, 0
         prev = sg[0] if n else 0
         for i in range(n):
             if sg[i] != prev:
-                self.reset()
+                active, above, below = False, 0, 0
                 prev = sg[i]
-            out[i] = self.step(sc[i], dg[i])
+            s, d = sc[i], dg[i]
+            fin = isfinite(s)
+            if not active:
+                if d or not fin:
+                    above = 0
+                    out[i] = S_DEGRADED if d else S_NORMAL
+                elif s >= on_t:
+                    above += 1
+                    if above >= on_n:
+                        active, above, below = True, 0, 0
+                        out[i] = S_ALERT
+                    else:
+                        out[i] = S_PENDING
+                else:
+                    above = 0
+                    out[i] = S_NORMAL
+            elif fin and s <= off_t:
+                below += 1
+                if below >= off_n:
+                    active, below = False, 0
+                    out[i] = S_DEGRADED if d else S_NORMAL
+                else:
+                    out[i] = S_CLEARING
+            else:
+                below = 0
+                out[i] = S_ALERT
+        self._active, self._above, self._below = active, above, below
         return out
 
 

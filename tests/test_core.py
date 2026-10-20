@@ -91,6 +91,25 @@ def test_run_equals_step_and_resets_on_segment():
     assert np.array_equal(batch, np.array(stream, dtype=np.int8))
 
 
+@pytest.mark.parametrize("seed", range(5))
+def test_fast_run_matches_step_with_nans_degraded_and_segments(seed):
+    rng = np.random.default_rng(seed)
+    n = 5000
+    s = rng.random(n)
+    s[rng.random(n) < 0.05] = np.nan
+    deg = rng.random(n) < 0.03
+    seg = np.cumsum(rng.random(n) < 0.002)
+    cfg = _cfg(on_threshold=0.6, off_threshold=0.4, on_delay_s=3, off_delay_s=5)
+    batch = HysteresisAlerter(cfg).run(s, degraded=deg, segments=seg)
+    a = HysteresisAlerter(cfg)
+    stream = []
+    for i in range(n):
+        if i and seg[i] != seg[i - 1]:
+            a.reset()
+        stream.append(a.step(s[i], bool(deg[i])))
+    assert np.array_equal(batch, np.array(stream, dtype=np.int8))
+
+
 def test_episode_split_at_segment_gap():
     act = np.ones(10, bool)
     seg = np.r_[np.zeros(5), np.ones(5)]

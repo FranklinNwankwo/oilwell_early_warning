@@ -5,7 +5,7 @@ becomes established. It is scored on lead time and false alarms per well-day, ne
 accuracy, and tested on the question an operator actually asks: *can simulated events
 plus my own wells' normal history replace labeled real events?*
 
-> Status: Phase 0 (data audit, core library) and Phase 1 (causal feature pipeline) complete. Results tables land in Phase 2-3.
+> Status: Phases 0-2 complete: data audit, causal feature pipeline, and four baselines evaluated under four training protocols ([results](reports/phase2_baselines.md)). Phase 3 (main model) next.
 
 ## What is here
 
@@ -18,10 +18,14 @@ plus my own wells' normal history replace labeled real events?*
 | `src/ew3w/alerting.py` | Hysteresis alerter (one `step()` for offline eval and streaming) |
 | `src/ew3w/metrics.py` | Event-level metrics: delay, lead time, censoring, false alarms per well-day (exact Poisson CI), well-cluster bootstrap |
 | `src/ew3w/splits.py` | Well-grouped folds and protocols P1-P4 (sim-only to real+sim) |
+| `src/ew3w/evaluation.py` | One harness for every scorer: training rows per protocol, out-of-fold calibration, FA-budget thresholds, test scoring |
+| `src/ew3w/baselines.py` | Health-only, physics rules, rolling z-score, isolation forest (Phase 2) |
 | `scripts/audit_dataset.py` | Reproduces every number in the plan; writes `reports/data_audit.md` |
 | `scripts/build_features.py` | Builds the feature cache under `data/features/<config key>/` |
+| `scripts/run_baselines.py` | Runs every baseline x protocol; writes `reports/phase2_baselines.md` |
 | `tests/test_core.py` | Unit tests: data, health, alerter, metrics, folds |
 | `tests/test_features.py` | Phase 1 gate: causality, streaming == batch, bad-sensor robustness |
+| `tests/test_evaluation.py` | Phase 2 harness: no test-well data in training or calibration, exact scoring of a known event |
 | `tests/test_real_data.py` | Integration tests on the real dataset (set `EW3W_DATASET`) |
 
 ## Setup (Windows, PowerShell)
@@ -33,9 +37,10 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 $env:EW3W_DATASET = "C:\data\3W"   # where YOUR 3W clone is: repo root or its dataset folder
-python -m pytest -q                # 47 tests (6 of them read the real dataset)
+python -m pytest -q                # 64 tests (6 of them read the real dataset)
 python scripts/audit_dataset.py    # ~5-10 min on a laptop
 python scripts/build_features.py   # ~10-20 min on a laptop, ~400 MB of disk
+python scripts/run_baselines.py    # ~1-2 h on a laptop, ~4.2 GB peak RAM
 ```
 
 ## Features (Phase 1)
@@ -51,6 +56,24 @@ differences (P-PDG − P-TPT, P-TPT − P-MON-CKP):
 Guarantees, enforced by `tests/test_features.py`: no feature uses data after its timestamp (prefix
 invariance and future-perturbation tests), a live service keeping only `FeatureConfig.history_s`
 (7.5 h) of data reproduces batch features, and state resets at data gaps.
+
+## Baselines (Phase 2)
+
+Every scorer runs through one harness. Thresholds are set on **training wells only**: the lowest
+threshold with at most 1 false alarm per well-week **and** at most 1% time in alarm on training
+normal data, using **out-of-fold** scores for anything that learns. Then the held-out wells are
+scored. Full tables, per-class results and operating curves: [`reports/phase2_baselines.md`](reports/phase2_baselines.md).
+
+| Baseline (P2: simulated events + site normal history) | Warned before established [95% CI] | Recall | FA / well-day [95% CI] | Time in alarm |
+|---|---|---|---|---|
+| physics rules | 0.58 [0.41, 0.76] | 0.22 | 0.164 [0.099, 0.256] | 0.8% |
+| rolling z-score | 0.48 [0.26, 0.69] | 0.09 | 0.129 [0.072, 0.213] | 0.4% |
+| isolation forest | 0.31 [0.14, 0.50] | 0.07 | 0.138 [0.079, 0.224] | 0.5% |
+| health only | 0.12 [0.00, 0.32] | 0.21 | 0.147 [0.085, 0.235] | 1.3% |
+
+- **Simulation-only calibration (P1) fails on real wells:** physics rules raise 1.88 and z-score 2.85 false alarms per well-day (13-20x the budget), in alarm 33-46% of the time. Isolation forest meets the false-alarm count but is in alarm 25% of the time.
+- **The sensor-health shortcut does not transfer:** calibrated honestly (out of fold), health-only detects nothing under P3/P4.
+- **The number to beat in Phase 3:** physics rules under P2, warned before establishment for 58% of events at 0.16 false alarms per well-day. Flow instability (class 4, 343 events, unseen in simulation) is almost never detected by any baseline.
 
 ## Key audit findings (from `reports/data_audit.md`)
 
