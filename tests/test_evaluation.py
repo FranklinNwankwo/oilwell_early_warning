@@ -168,3 +168,15 @@ def test_fitted_scorers_are_calibrated_out_of_fold():
     real, syn = _dataset()
     r = run_protocol(Memoriser, "P3_real", real, syn, [FOLD], ALERT, 1 / 7, log=lambda *_: None)
     assert (r.calibrations[0].sorted_normal == 1.0).all()
+
+
+def test_capped_training_rows_match_protocol_and_cap():
+    real, syn = _dataset()
+    for protocol in PROTOCOLS:
+        full = training_rows(protocol, real, syn, FOLD)
+        capped = training_rows(protocol, real, syn, FOLD, cap_per_group=50)
+        assert set(capped["well"].astype(str)) <= set(full["well"].astype(str))
+        assert not set(capped["well"].astype(str)) & set(FOLD.test_wells)
+        phase = np.where(capped["class"] > 100, 2, np.where(capped["class"] == 0, 0, 1))
+        counts = pd.Series(1, index=pd.MultiIndex.from_arrays([capped["instance_id"].astype(str), phase])).groupby(level=[0, 1]).size()
+        assert counts.max() <= 50

@@ -7,6 +7,7 @@ src/ew3w/data.py
 src/ew3w/evaluation.py
 src/ew3w/features.py
 src/ew3w/metrics.py
+src/ew3w/model.py
 src/ew3w/quality.py
 src/ew3w/schema.py
 src/ew3w/splits.py
@@ -18,4 +19,5 @@ src/ew3w.egg-info/top_level.txt
 tests/test_core.py
 tests/test_evaluation.py
 tests/test_features.py
+tests/test_model.py
 tests/test_real_data.py

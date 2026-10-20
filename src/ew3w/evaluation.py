@@ -57,11 +57,14 @@ def off_of(on: float) -> float:
 
 
 # --------------------------------------------------------------------------- data
-def load_cache(cache_dir: str | Path, columns: list[str], synth_normal_only: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
+def load_cache(cache_dir: str | Path, columns: list[str], synth_normal_only: bool = False,
+               synth_event_cap: int | None = None, seed: int = 0) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(real, synthetic) feature rows with only `columns` + META, memory-lean.
 
     synth_normal_only: keep only normal-labeled synthetic rows (enough for scorers that
-    never train on events), filtered per file so the full table is never in memory."""
+    never train on events), filtered per file so the full table is never in memory.
+    synth_event_cap: keep at most this many EVENT rows (transient, steady) per synthetic
+    instance and phase; all normal rows are kept (P1 calibrates on contiguous normal runs)."""
     cache_dir = Path(cache_dir)
     if not (cache_dir / "config.json").exists():
         raise FileNotFoundError(f"{cache_dir} is not a feature cache (run scripts/build_features.py)")
@@ -74,7 +77,19 @@ def load_cache(cache_dir: str | Path, columns: list[str], synth_normal_only: boo
         parts = []
         for f in files:
             d = pd.read_parquet(f, columns=cols)
-            parts.append(d[d["class"] == 0] if normal_only else d)
+            if normal_only:
+                d = d[d["class"] == 0]
+            elif synth_event_cap is not None and "real" not in pattern:
+                c = d["class"].to_numpy()
+                ev = ~np.isnan(c) & (c != 0)
+                phase = np.where(c > 100, 2, 1)
+                order = np.random.default_rng(seed).permutation(int(ev.sum()))
+                evi = np.flatnonzero(ev)[order]
+                g = pd.DataFrame({"k": d["instance_id"].to_numpy()[evi], "p": phase[evi], "i": evi})
+                keep_ev = g.groupby(["k", "p"], sort=False).head(synth_event_cap)["i"].to_numpy()
+                keep = np.sort(np.r_[np.flatnonzero(~ev), keep_ev])
+                d = d.iloc[keep]
+            parts.append(d)
         df = pd.concat(parts)
         for c in ("instance_id", "well", "source"):
             df[c] = df[c].astype("category")
@@ -92,19 +107,46 @@ def event_target(df: pd.DataFrame) -> np.ndarray:
     return np.where(np.isnan(c), np.nan, (c != 0).astype(np.float64))
 
 
-def training_rows(protocol: str, real: pd.DataFrame, synth: pd.DataFrame, fold: Fold) -> pd.DataFrame:
-    """Row-level version of splits.training_selection (labeled rows only)."""
-    tr_real = real[real["well"].isin(fold.train_wells)]
-    if protocol == "P1_sim_only":
-        rows = synth
-    elif protocol == "P2_sim_plus_site_normal":
-        rows = pd.concat([synth, tr_real[tr_real["event_class"] == 0]])
-    elif protocol == "P3_real":
-        rows = tr_real
-    elif protocol == "P4_real_plus_sim":
-        rows = pd.concat([synth, tr_real])
-    else:
+def _capped(frame: pd.DataFrame, mask: np.ndarray, per_group: int, seed: int) -> pd.DataFrame:
+    """Rows of `frame` where `mask`, labeled, at most `per_group` per (instance, phase).
+    Works on positions, so only the kept rows are ever copied (memory: the full real
+    table is ~1 GB; copying it per fold is what pushed Phase 3 past 5 GB)."""
+    cls = frame["class"].to_numpy(dtype=np.float64)
+    idx = np.flatnonzero(mask & ~np.isnan(cls))
+    c = cls[idx]
+    phase = np.where(c > 100, 2, np.where(c == 0, 0, 1)).astype(np.int8)
+    inst = frame["instance_id"]
+    key = (inst.cat.codes.to_numpy() if hasattr(inst, "cat") else pd.factorize(inst)[0])[idx]
+    order = np.random.default_rng(seed).permutation(idx.size)
+    g = pd.DataFrame({"k": key[order], "p": phase[order], "i": idx[order]})
+    keep = np.sort(g.groupby(["k", "p"], sort=False).head(per_group)["i"].to_numpy())
+    return frame.iloc[keep]
+
+
+def training_rows(protocol: str, real: pd.DataFrame, synth: pd.DataFrame, fold: Fold,
+                  cap_per_group: int | None = None, seed: int = 0) -> pd.DataFrame:
+    """Row-level version of splits.training_selection (labeled rows only).
+    cap_per_group: keep at most this many rows per (instance, label phase), selected
+    before any copy is made."""
+    if protocol not in ("P1_sim_only", "P2_sim_plus_site_normal", "P3_real", "P4_real_plus_sim"):
         raise ValueError(protocol)
+    in_train = real["well"].isin(fold.train_wells).to_numpy()
+    real_mask = {
+        "P1_sim_only": np.zeros(len(real), bool),
+        "P2_sim_plus_site_normal": in_train & (real["event_class"].to_numpy() == 0),
+        "P3_real": in_train,
+        "P4_real_plus_sim": in_train,
+    }[protocol]
+    use_synth = protocol != "P3_real"
+    if cap_per_group is not None:
+        parts = [_capped(real, real_mask, cap_per_group, seed)]
+        if use_synth:
+            parts.insert(0, _capped(synth, np.ones(len(synth), bool), cap_per_group, seed))
+    else:
+        parts = [real[real_mask]]
+        if use_synth:
+            parts.insert(0, synth)
+    rows = pd.concat(parts) if len(parts) > 1 else parts[0]
     return rows[rows["class"].notna()]
 
 
@@ -300,14 +342,27 @@ def run_protocol(make_scorer: Callable[[], Scorer], protocol: str, real: pd.Data
     fas: list[FalseAlarmCounts] = []
     cals: dict[int, Calibration] = {}
     tps: dict[int, np.ndarray] = {}
+    cached: tuple | None = None
     for fold in folds:
-        sc = make_scorer()
-        normal = calibration_normal(protocol, real, synth, fold)
-        train = training_rows(protocol, real, synth, fold) if sc.needs_events else normal
-        sc.fit(train, normal)
-        raw_cal = (out_of_fold_scores(make_scorer, train, normal, inner_folds, seed)
-                   if getattr(sc, "fitted", True) else sc.score(normal))
-        cal = calibrate(raw_cal, normal, alert_cfg, fa_budget_per_day)
+        if protocol == "P1_sim_only" and cached is not None:
+            sc, cal = cached  # P1 uses no real data, so its model and threshold are fold-invariant
+        else:
+            sc = make_scorer()
+            normal = calibration_normal(protocol, real, synth, fold)
+            if sc.needs_events:
+                train = training_rows(protocol, real, synth, fold, cap_per_group=getattr(sc, "per_group", None), seed=seed)
+            else:
+                train = normal
+            if hasattr(sc, "prepare_training"):
+                # e.g. per-instance row caps: done ONCE here, so the out-of-fold refits below
+                # slice a small frame instead of copying millions of rows three more times
+                train = sc.prepare_training(train)
+            sc.fit(train, normal)
+            raw_cal = (out_of_fold_scores(make_scorer, train, normal, inner_folds, seed)
+                       if getattr(sc, "fitted", True) else sc.score(normal))
+            cal = calibrate(raw_cal, normal, alert_cfg, fa_budget_per_day)
+            if protocol == "P1_sim_only":
+                cached = (sc, cal)
         cals[fold.k] = cal
         test = real[real["well"].isin(fold.test_wells)]
         p_test = cal.to_percentile(sc.score(test))

@@ -271,3 +271,31 @@ def well_bootstrap_ci(
         return (point, np.nan, np.nan)
     lo, hi = np.quantile(vals, [alpha / 2, 1 - alpha / 2])
     return (point, float(lo), float(hi))
+
+
+def paired_difference(a: pd.DataFrame, b: pd.DataFrame, n_boot: int = 2000, alpha: float = 0.05,
+                      seed: int = 0) -> dict:
+    """Warned-before-established of A minus B on the SAME event instances, with a
+    well-cluster bootstrap CI. Pairing removes the between-event variance that makes
+    two separate CIs overlap even when one method is consistently better."""
+    keep = ["instance_id", "well", "warned_before_established", "onset_observable", "censored"]
+    j = a[keep].merge(b[["instance_id", "warned_before_established"]], on="instance_id", suffixes=("_a", "_b"))
+    j = j[j.onset_observable & ~j.censored]
+    if j.empty:
+        return dict(diff=np.nan, lo=np.nan, hi=np.nan, n=0, a_only=0, b_only=0)
+    d = j.warned_before_established_a.astype(float) - j.warned_before_established_b.astype(float)
+    j = j.assign(d=d.to_numpy())
+    rng = np.random.default_rng(seed)
+    wells = j.well.astype(str).to_numpy()
+    uniq = np.unique(wells)
+    sums = {w: (j.d[wells == w].sum(), (wells == w).sum()) for w in uniq}
+    vals = []
+    for _ in range(n_boot):
+        pick = rng.choice(uniq, uniq.size, replace=True)
+        s = sum(sums[w][0] for w in pick)
+        n = sum(sums[w][1] for w in pick)
+        vals.append(s / n)
+    lo, hi = np.quantile(vals, [alpha / 2, 1 - alpha / 2])
+    return dict(diff=float(j.d.mean()), lo=float(lo), hi=float(hi), n=len(j),
+                a_only=int(((j.warned_before_established_a) & ~(j.warned_before_established_b)).sum()),
+                b_only=int((~(j.warned_before_established_a) & (j.warned_before_established_b)).sum()))
