@@ -4,3 +4,6 @@ __pycache__/
 .pytest_cache/
 data/catalog.parquet
 data/features/
+reports/phase4_checkpoint.pkl
+reports/phase4_checkpoint.tmp
+*.egg-info/

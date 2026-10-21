@@ -185,3 +185,22 @@ class GBDTSimTrained(GBDTEarlyWarning):
             raise ValueError("training rows contain a single class")
         self.model = self._new_model().fit(X, y)
         return self
+
+
+class GBDTSimTrainedNoDropout(GBDTSimTrained):
+    """Ablation for Phase 4: the simulation-only model trained on simulated rows exactly as
+    they are (every sensor always healthy), with no transplanted availability masks."""
+
+    name = "gbdt_sim_trained_no_dropout"
+
+    def fit(self, train: pd.DataFrame, normal: pd.DataFrame) -> "GBDTSimTrainedNoDropout":
+        synth = train[train["source"].astype(str) != "real"]
+        if synth.empty:
+            raise ValueError("needs synthetic training rows (P1, P2 or P4)")
+        rows = self.prepare_training(synth)
+        y = event_target(rows).astype(int)
+        if np.unique(y).size < 2:
+            raise ValueError("training rows contain a single class")
+        self.model = self._new_model().fit(rows[VALUE_COLS].to_numpy(np.float32), y)
+        self.mask_source = "none"
+        return self

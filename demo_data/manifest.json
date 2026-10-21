@@ -1,0 +1,342 @@
+{
+  "meta": {
+    "fold": 1,
+    "protocol": "P2_sim_plus_site_normal",
+    "train_wells": [
+      "WELL-00002",
+      "WELL-00003",
+      "WELL-00004",
+      "WELL-00005",
+      "WELL-00006",
+      "WELL-00007",
+      "WELL-00008",
+      "WELL-00009",
+      "WELL-00010",
+      "WELL-00012",
+      "WELL-00013",
+      "WELL-00014",
+      "WELL-00015",
+      "WELL-00019",
+      "WELL-00020",
+      "WELL-00022",
+      "WELL-00023",
+      "WELL-00024",
+      "WELL-00026",
+      "WELL-00027",
+      "WELL-00028",
+      "WELL-00029",
+      "WELL-00030",
+      "WELL-00031",
+      "WELL-00034",
+      "WELL-00035",
+      "WELL-00036",
+      "WELL-00037",
+      "WELL-00039",
+      "WELL-00040",
+      "WELL-00041",
+      "WELL-00042"
+    ],
+    "test_wells": [
+      "WELL-00001",
+      "WELL-00011",
+      "WELL-00016",
+      "WELL-00021",
+      "WELL-00025",
+      "WELL-00032",
+      "WELL-00033",
+      "WELL-00038"
+    ],
+    "feature_key": "v1-8dba62d43f",
+    "sklearn": "1.9.1",
+    "pandas": "3.0.6",
+    "numpy": "2.5.4",
+    "alert": {
+      "on_delay_s": 60,
+      "off_delay_s": 300,
+      "period_s": 10
+    },
+    "fa_budget_per_day": 0.14285714285714285
+  },
+  "episodes": [
+    {
+      "id": "dhsv_both_warn",
+      "file": "dhsv_both_warn.parquet",
+      "kind": "event",
+      "title": "Spurious Closure of DHSV (WELL-00011, 2014-05-15)",
+      "story": "Spurious DHSV closure: both detectors warn about 3 hours before the event is established.",
+      "well": "WELL-00011",
+      "instance_id": "2/WELL-00011_20140515083000",
+      "event_class": 2,
+      "event_name": "Spurious Closure of DHSV",
+      "replay_start": "2014-05-15 10:22:54",
+      "onset": "2014-05-15 11:22:54",
+      "established": "2014-05-15 14:30:15",
+      "end": "2014-05-15 15:00:15",
+      "phase4": {
+        "physics_rules": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 182.7
+        },
+        "gbdt_sim_trained": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 182.0
+        }
+      },
+      "streamed": {
+        "physics_rules": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 182.7
+        },
+        "gbdt_sim_trained": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 182.0
+        }
+      },
+      "size_kb": 339
+    },
+    {
+      "id": "bsw_rules_only",
+      "file": "bsw_rules_only.parquet",
+      "kind": "event",
+      "title": "Abrupt Increase of BSW (WELL-00001, 2014-01-24)",
+      "story": "Abrupt BSW increase: physics rules warn hours ahead; the learned model never alarms.",
+      "well": "WELL-00001",
+      "instance_id": "1/WELL-00001_20140124083303",
+      "event_class": 1,
+      "event_name": "Abrupt Increase of BSW",
+      "replay_start": "2014-01-24 20:46:39",
+      "onset": "2014-01-24 21:46:39",
+      "established": "2014-01-25 00:30:11",
+      "end": "2014-01-25 01:00:11",
+      "phase4": {
+        "physics_rules": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 159.3
+        },
+        "gbdt_sim_trained": {
+          "detected": false,
+          "warned": false,
+          "lead_min": null
+        }
+      },
+      "streamed": {
+        "physics_rules": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 159.3
+        },
+        "gbdt_sim_trained": {
+          "detected": false,
+          "warned": false,
+          "lead_min": null
+        }
+      },
+      "size_kb": 604
+    },
+    {
+      "id": "productivity_both_warn",
+      "file": "productivity_both_warn.parquet",
+      "kind": "event",
+      "title": "Rapid Productivity Loss (WELL-00016, 2018-04-05)",
+      "story": "Rapid productivity loss: both warn about 45 minutes before establishment.",
+      "well": "WELL-00016",
+      "instance_id": "5/WELL-00016_20180405005319",
+      "event_class": 5,
+      "event_name": "Rapid Productivity Loss",
+      "replay_start": "2018-04-05 01:22:55",
+      "onset": "2018-04-05 02:22:55",
+      "established": "2018-04-05 02:57:06",
+      "end": "2018-04-05 02:58:55",
+      "phase4": {
+        "physics_rules": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 44.2
+        },
+        "gbdt_sim_trained": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 44.2
+        }
+      },
+      "streamed": {
+        "physics_rules": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 44.2
+        },
+        "gbdt_sim_trained": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 44.2
+        }
+      },
+      "size_kb": 234
+    },
+    {
+      "id": "productivity_model_only",
+      "file": "productivity_model_only.parquet",
+      "kind": "event",
+      "title": "Rapid Productivity Loss (WELL-00016, 2018-04-26)",
+      "story": "Rapid productivity loss: here the learned model warns and the physics rules miss.",
+      "well": "WELL-00016",
+      "instance_id": "5/WELL-00016_20180426135108",
+      "event_class": 5,
+      "event_name": "Rapid Productivity Loss",
+      "replay_start": "2018-04-26 13:57:23",
+      "onset": "2018-04-26 14:57:23",
+      "established": "2018-04-26 15:40:07",
+      "end": "2018-04-26 15:44:20",
+      "phase4": {
+        "physics_rules": {
+          "detected": false,
+          "warned": false,
+          "lead_min": null
+        },
+        "gbdt_sim_trained": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 52.7
+        }
+      },
+      "streamed": {
+        "physics_rules": {
+          "detected": false,
+          "warned": false,
+          "lead_min": null
+        },
+        "gbdt_sim_trained": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 52.7
+        }
+      },
+      "size_kb": 279
+    },
+    {
+      "id": "scaling_rules_only",
+      "file": "scaling_rules_only.parquet",
+      "kind": "event",
+      "title": "Scaling in PCK (WELL-00001, 2017-02-26)",
+      "story": "Scaling in the production choke (slow): physics rules warn about 4 hours ahead.",
+      "well": "WELL-00001",
+      "instance_id": "7/WELL-00001_20170226130146",
+      "event_class": 7,
+      "event_name": "Scaling in PCK",
+      "replay_start": "2017-02-27 00:18:58",
+      "onset": "2017-02-26 23:24:16",
+      "established": "2017-02-27 10:03:11",
+      "end": "2017-02-27 10:18:58",
+      "phase4": {
+        "physics_rules": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 255.0
+        },
+        "gbdt_sim_trained": {
+          "detected": false,
+          "warned": false,
+          "lead_min": null
+        }
+      },
+      "streamed": {
+        "physics_rules": {
+          "detected": true,
+          "warned": true,
+          "lead_min": 255.0
+        },
+        "gbdt_sim_trained": {
+          "detected": false,
+          "warned": false,
+          "lead_min": null
+        }
+      },
+      "size_kb": 1065
+    },
+    {
+      "id": "service_hydrate_miss",
+      "file": "service_hydrate_miss.parquet",
+      "kind": "event",
+      "title": "Hydrate in Service Line (WELL-00016, 2015-04-18)",
+      "story": "Hydrate in the service line: both miss. It acts on gas-lift sensors outside the shared set.",
+      "well": "WELL-00016",
+      "instance_id": "9/WELL-00016_20150418132043",
+      "event_class": 9,
+      "event_name": "Hydrate in Service Line",
+      "replay_start": "2015-04-18 13:29:56",
+      "onset": "2015-04-18 14:29:56",
+      "established": "2015-04-18 16:13:17",
+      "end": "2015-04-18 16:43:17",
+      "phase4": {
+        "physics_rules": {
+          "detected": false,
+          "warned": false,
+          "lead_min": null
+        },
+        "gbdt_sim_trained": {
+          "detected": false,
+          "warned": false,
+          "lead_min": null
+        }
+      },
+      "streamed": {
+        "physics_rules": {
+          "detected": false,
+          "warned": false,
+          "lead_min": null
+        },
+        "gbdt_sim_trained": {
+          "detected": false,
+          "warned": false,
+          "lead_min": null
+        }
+      },
+      "size_kb": 321
+    },
+    {
+      "id": "normal_quiet",
+      "file": "normal_quiet.parquet",
+      "kind": "normal",
+      "title": "Normal operation (WELL-00001, 2017-08-23)",
+      "well": "WELL-00001",
+      "replay_start": "2017-08-23 15:04:49",
+      "end": "2017-08-23 21:04:39",
+      "story": "Six hours of normal operation: neither detector alarms. Use this one to break sensors.",
+      "streamed": {
+        "physics_rules": {
+          "alert_episodes": 0
+        },
+        "gbdt_sim_trained": {
+          "alert_episodes": 0
+        }
+      },
+      "size_kb": 482
+    },
+    {
+      "id": "false_alarm",
+      "file": "false_alarm.parquet",
+      "kind": "false_alarm",
+      "title": "A false alarm (WELL-00001, 2017-02-01)",
+      "well": "WELL-00001",
+      "replay_start": "2017-02-01 01:02:07",
+      "alarm_at": "2017-02-01 01:17:59",
+      "end": "2017-02-01 04:02:09",
+      "story": "Normal operation where the physics rules DO alarm (the threshold allows ~1 per well-week). Raised 16 min after data resumes, before the 6 h baselines exist: the oscillation rule's scale falls back to its 0.5 bar floor, so ordinary choke-pressure noise reads larger than it will once a baseline forms. Then held 164 min (still active at clip end): the score stays above the clearing threshold, set one decade below the alarm threshold. Shown on purpose; see the README's known issues.",
+      "streamed": {
+        "physics_rules": {
+          "alert_episodes": 1
+        },
+        "gbdt_sim_trained": {
+          "alert_episodes": 0
+        }
+      },
+      "labels_start": "2017-02-01 02:02:07",
+      "size_kb": 209
+    }
+  ]
+}

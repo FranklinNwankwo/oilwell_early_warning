@@ -331,6 +331,28 @@ def out_of_fold_scores(make_scorer: Callable[[], Scorer], train: pd.DataFrame, n
     return oof
 
 
+def fit_fold(make_scorer: Callable[[], Scorer], protocol: str, real: pd.DataFrame, synth: pd.DataFrame,
+             fold: Fold, alert_cfg: HysteresisConfig, fa_budget_per_day: float,
+             inner_folds: int = 3, seed: int = 0) -> tuple[Scorer, Calibration]:
+    """Train on the fold's training rows and set the threshold on its training-normal rows.
+    Nothing from fold.test_wells is read. Returned detector + calibration are frozen:
+    Phase 4 reuses them unchanged under every injected sensor failure."""
+    sc = make_scorer()
+    normal = calibration_normal(protocol, real, synth, fold)
+    if sc.needs_events:
+        train = training_rows(protocol, real, synth, fold, cap_per_group=getattr(sc, "per_group", None), seed=seed)
+    else:
+        train = normal
+    if hasattr(sc, "prepare_training"):
+        # e.g. per-instance row caps: done ONCE here, so the out-of-fold refits below
+        # slice a small frame instead of copying millions of rows three more times
+        train = sc.prepare_training(train)
+    sc.fit(train, normal)
+    raw_cal = (out_of_fold_scores(make_scorer, train, normal, inner_folds, seed)
+               if getattr(sc, "fitted", True) else sc.score(normal))
+    return sc, calibrate(raw_cal, normal, alert_cfg, fa_budget_per_day)
+
+
 def run_protocol(make_scorer: Callable[[], Scorer], protocol: str, real: pd.DataFrame, synth: pd.DataFrame,
                  folds: list[Fold], alert_cfg: HysteresisConfig, fa_budget_per_day: float,
                  grace_s: float = 600.0, log: Callable[[str], None] = print,
@@ -347,20 +369,7 @@ def run_protocol(make_scorer: Callable[[], Scorer], protocol: str, real: pd.Data
         if protocol == "P1_sim_only" and cached is not None:
             sc, cal = cached  # P1 uses no real data, so its model and threshold are fold-invariant
         else:
-            sc = make_scorer()
-            normal = calibration_normal(protocol, real, synth, fold)
-            if sc.needs_events:
-                train = training_rows(protocol, real, synth, fold, cap_per_group=getattr(sc, "per_group", None), seed=seed)
-            else:
-                train = normal
-            if hasattr(sc, "prepare_training"):
-                # e.g. per-instance row caps: done ONCE here, so the out-of-fold refits below
-                # slice a small frame instead of copying millions of rows three more times
-                train = sc.prepare_training(train)
-            sc.fit(train, normal)
-            raw_cal = (out_of_fold_scores(make_scorer, train, normal, inner_folds, seed)
-                       if getattr(sc, "fitted", True) else sc.score(normal))
-            cal = calibrate(raw_cal, normal, alert_cfg, fa_budget_per_day)
+            sc, cal = fit_fold(make_scorer, protocol, real, synth, fold, alert_cfg, fa_budget_per_day, inner_folds, seed)
             if protocol == "P1_sim_only":
                 cached = (sc, cal)
         cals[fold.k] = cal

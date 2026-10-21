@@ -4,9 +4,10 @@ pyarrow>=14
 scipy>=1.11
 scikit-learn>=1.4
 tabulate>=0.9
+matplotlib>=3.8
 
 [demo]
-streamlit>=1.35
+streamlit>=1.50
 plotly>=5.20
 
 [dev]

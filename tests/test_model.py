@@ -82,3 +82,18 @@ def test_paired_difference_counts_and_sign():
     r = paired_difference(a, b, n_boot=500)
     assert r["n"] == 10 and r["a_only"] == 3 and r["b_only"] == 0
     assert r["diff"] == pytest.approx(0.3) and r["lo"] <= 0.3 <= r["hi"]
+
+
+def test_sim_trained_variants_never_train_on_real_rows():
+    """Both simulation-only variants must ignore real rows except as mask patterns."""
+    from ew3w.model import GBDTSimTrained, GBDTSimTrainedNoDropout
+
+    rng = np.random.default_rng(5)
+    sim = pd.concat([_frame(2000, "simulated", 0, "SN", 1.0, rng), _frame(2000, "simulated", 102, "SE", 1.0, rng)])
+    real = _frame(2000, "real", 0, "R", 0.2, rng)
+    real[VALUE_COLS] = 1e6  # poison: any model that trains on real VALUES would see this
+    for cls in (GBDTSimTrained, GBDTSimTrainedNoDropout):
+        a = cls(per_group=10_000, max_iter=20).fit(pd.concat([sim, real]), real)
+        b = cls(per_group=10_000, max_iter=20).fit(pd.concat([sim, real.assign(**{c: 0.0 for c in VALUE_COLS})]), real)
+        probe = _frame(500, "real", 0, "P", 0.5, rng)
+        np.testing.assert_allclose(a.score(probe), b.score(probe))  # real values never influence the model

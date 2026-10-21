@@ -94,3 +94,28 @@ def test_features_on_real_and_synthetic(metas):
         m = next(m for m in metas if m.source == src)
         g = build_features(load_instance(m, list(SHARED_SENSORS)), cfg, detect_frozen=False)
         assert len(g) > 0 and not np.isinf(g[cfg.feature_names()].to_numpy(dtype=float)).any()
+
+
+def test_streaming_reproduces_batch_features_on_a_real_well(metas):
+    """Phase 5: the streaming service on real WELL-00011 (historian holds, gaps, missing
+    P-PDG) gives the batch features to the last stored digit, rows and health exactly."""
+    import pandas as pd
+
+    from ew3w.features import FeatureConfig, build_features
+    from ew3w.schema import SHARED_SENSORS
+    from ew3w.stream import FeatureStream
+
+    cfg = FeatureConfig()
+    tl = stitch_well([m for m in metas if m.well == "WELL-00011"], SHARED_SENSORS)
+    batch = build_features(tl, cfg, detect_frozen=True)
+    fs = FeatureStream(cfg, detect_frozen=True)
+    t = pd.DatetimeIndex(tl.index).as_unit("ns").asi8
+    rows = [r for r in (fs.push(ti, x) for ti, x in zip(t, tl[list(SHARED_SENSORS)].to_numpy())) if r is not None]
+    S, B = np.vstack(rows), batch[cfg.feature_names()].to_numpy(np.float32)
+    assert S.shape == B.shape
+    assert np.array_equal(np.isnan(S), np.isnan(B))
+    d = np.abs(S[np.isfinite(B)].astype(np.float64) - B[np.isfinite(B)])
+    assert d.max() <= 1e-3 + 1e-6 and (d == 0).mean() > 0.9999
+    for c in [c for c in cfg.feature_names() if c.endswith(("__health", "__age")) or c == "n_ok"]:
+        j = cfg.feature_names().index(c)
+        np.testing.assert_array_equal(S[:, j], B[:, j], err_msg=c)
