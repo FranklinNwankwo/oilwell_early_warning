@@ -299,3 +299,20 @@ def paired_difference(a: pd.DataFrame, b: pd.DataFrame, n_boot: int = 2000, alph
     return dict(diff=float(j.d.mean()), lo=float(lo), hi=float(hi), n=len(j),
                 a_only=int(((j.warned_before_established_a) & ~(j.warned_before_established_b)).sum()),
                 b_only=int((~(j.warned_before_established_a) & (j.warned_before_established_b)).sum()))
+
+
+def visible_false_alarm_episodes(labels: np.ndarray, active: np.ndarray, segments: np.ndarray | None = None,
+                                 period_s: float = SAMPLE_PERIOD_S) -> list[dict]:
+    """Phase 6: alert episodes an operator would see in a NORMAL-instance timeline.
+
+    count_false_alarms counts an episode only if it STARTS on a class-0 sample, so an
+    alarm raised during the unlabeled lead-in hour and still active once the normal
+    labels begin is not counted. This counts every episode that overlaps at least one
+    class-0 sample, and returns each with its start index and duration."""
+    labels = np.asarray(labels, dtype=np.float64)
+    out = []
+    for s, e in alert_episodes(np.asarray(active, dtype=bool), segments):
+        if (labels[s:e] == 0).any():
+            out.append({"start": int(s), "duration_s": float((e - s) * period_s),
+                        "starts_on_normal": bool(labels[s] == 0)})
+    return out

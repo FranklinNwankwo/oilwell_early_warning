@@ -149,3 +149,26 @@ class IForest:
 
 
 SCORERS = {"health_only": HealthOnly, "physics_rules": PhysicsRules, "zscore": ZScore, "iforest": IForest}
+
+
+class PhysicsRulesWarmup(PhysicsRules):
+    """Phase 6 variant (the evaluated PhysicsRules is unchanged). The oscillation rule
+    divides a 30-min standard deviation by the signal's robust scale. Until a baseline
+    exists (the first ~hour after every data gap) that scale falls back to its floor
+    (0.5 bar), so ordinary choke-pressure noise scores high: the Phase 5 demo's false
+    alarm. Here the oscillation rule only scores once the same signal's 30-min level,
+    which needs that baseline, is available. Every other rule already needs it."""
+
+    name = "physics_rules_warmup"
+    columns = PhysicsRules.columns + ["P-TPT__lvl_1800", "P-MON-CKP__lvl_1800"]
+
+    def rule_scores(self, df: pd.DataFrame) -> dict[str, np.ndarray]:
+        r = super().rule_scores(df)
+        g = lambda c: _col(df, c)  # noqa: E731
+        osc_t = np.where(np.isfinite(g("P-TPT__lvl_1800")), g("P-TPT__std_1800"), np.nan)
+        osc_c = np.where(np.isfinite(g("P-MON-CKP__lvl_1800")), g("P-MON-CKP__std_1800"), np.nan)
+        r["oscillation"] = np.fmax(osc_t, osc_c)
+        return r
+
+
+SCORERS["physics_rules_warmup"] = PhysicsRulesWarmup

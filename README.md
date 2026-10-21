@@ -5,7 +5,40 @@ becomes established. It is scored on lead time and false alarms per well-day, ne
 accuracy, and tested on the question an operator actually asks: *can simulated events
 plus my own wells' normal history replace labeled real events?*
 
-> Status: Phases 0-5 complete: data audit, causal feature pipeline, four baselines ([results](reports/phase2_baselines.md)), the main model ([results](reports/phase3_model.md)), the sensor-degradation study ([results](reports/phase4_degradation.md)) and a live streaming replay demo ([below](#streaming-replay-demo-phase-5)). **Headline: under sim-to-real shift, hand-written physics rules beat a learned gradient-boosted model, and stay ahead as sensors fail.** Phase 6 (design doc) next.
+## Decision memo
+
+**Question.** An operator has simulated events and their own wells' normal history, but no labeled
+real events. Can that be enough for an early-warning system worth running? (Protocol **P2**.)
+
+**Answer: yes, with hand-written physics rules, not with a learned model.** On held-out wells, with
+the alarm threshold fixed in advance on training wells (≤ 1 false alarm per well-week):
+
+| P2, held-out wells | Warned before established [95% CI] | Median lead | False alarms / well-day [95% CI] |
+|---|---|---|---|
+| **Physics rules (recommended)** | **0.58** [0.41, 0.76] of 48 events | 179 min | 0.198 [0.126, 0.298] operator-visible (0.164 as first reported) |
+| Gradient-boosted trees, simulation-trained | 0.42 [0.24, 0.61] | 175 min | 0.216 [0.140, 0.318] (first-reported count) |
+| Gradient-boosted trees, main model | 0.29 [0.16, 0.44] | 130 min | 0.009 [0.000, 0.048] (first-reported count) |
+
+Paired on the same events, the main learned model warns for 29 points fewer events than the rules
+(−0.29 [−0.50, −0.09]). The rules also degrade more slowly when sensors fail, and every alert can
+say which rule fired.
+
+**Main limitation.** The evidence is thin and narrow. 48 events with a lead time; false alarms
+measured on the 9 wells that have normal data, and all of them come from 2 of those wells. Recall
+over all events is 0.22: flow instability (343 instances) is never simulated and almost never
+caught. The threshold also overshoots on new wells (0.198 vs a 0.143 budget), so a deployment needs
+per-well calibration.
+
+**What I would do next.** Ship the rules with the two fixes measured in Phase 6 (no oscillation
+scoring until a baseline exists, which removes the 4 post-gap false alarms at no loss of early
+warnings; half-decade dead-band, which halves the longest alarm). Run in shadow mode per well,
+with per-well thresholds and operator feedback as the labels this dataset lacks.
+
+Design, trade-offs and deployment plan: [`docs/DESIGN.md`](docs/DESIGN.md). Live replay:
+`streamlit run app/demo.py` ([below](#streaming-replay-demo-phase-5)).
+
+> Status: all phases complete: data audit, causal features, baselines, main model, sensor
+> degradation, streaming demo and Phase 6 follow-ups ([report](reports/phase6_followups.md)).
 
 ## What is here
 
@@ -30,6 +63,8 @@ plus my own wells' normal history replace labeled real events?*
 | `scripts/run_degradation.py` | Phase 4 study; writes `reports/phase4_degradation.md` and the chart; `--resume`, `--replot` |
 | `scripts/export_demo.py` | Freezes the demo detectors (`models/`), cuts replay clips (`demo_data/`), re-checks every clip against Phase 4 |
 | `scripts/bench_stream.py` | Cost per reading of the streaming service |
+| `scripts/run_followups.py` | Phase 6: operator-visible false alarms, warm-up fix, dead-band sensitivity; writes `reports/phase6_followups.md` |
+| `docs/DESIGN.md` | Design doc: decisions, trade-offs, results, known issues, real-deployment changes |
 | `app/demo.py` | Streamlit live replay: two detectors, status lamps, break-a-sensor controls (Phase 5) |
 | `tests/test_core.py` | Unit tests: data, health, alerter, metrics, folds |
 | `tests/test_features.py` | Phase 1 gate: causality, streaming == batch, bad-sensor robustness |
@@ -38,6 +73,7 @@ plus my own wells' normal history replace labeled real events?*
 | `tests/test_degradation.py` | Phase 4: injected failures match a rebuild from raw data exactly |
 | `tests/test_stream.py` | Phase 5 gate: streaming == batch features and alerts; compact thresholds give identical decisions |
 | `tests/test_app.py` | Phase 5: the app replays headless; silent blindness shows DEGRADED; a stuck sensor is flagged after 1 h |
+| `tests/test_followups.py` | Phase 6: warm-up variant changes only the post-gap case; visible false-alarm count |
 | `tests/test_real_data.py` | Integration tests on the real dataset (set `EW3W_DATASET`) |
 
 ## Setup (Windows, PowerShell)
@@ -49,7 +85,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev,demo]"
 $env:EW3W_DATASET = "C:\data\3W"   # where YOUR 3W clone is: repo root or its dataset folder
-python -m pytest -q                # 92 tests (7 read the real dataset, 3 drive the app)
+python -m pytest -q                # 96 tests (7 read the real dataset, 3 drive the app)
 python scripts/audit_dataset.py    # ~5-10 min on a laptop
 python scripts/build_features.py   # ~10-20 min on a laptop, ~400 MB of disk
 python scripts/run_baselines.py    # ~1-2 h on a laptop, ~4.2 GB peak RAM
@@ -57,6 +93,7 @@ python scripts/run_model.py        # ~1-2 h on a laptop, ~4.1 GB peak RAM
 python scripts/run_degradation.py  # ~1.5-2.5 h on a laptop, ~3.2 GB peak RAM; --resume after an interruption
 python scripts/export_demo.py      # ~2-5 min, ~3.7 GB peak RAM (optional: models/ and demo_data/ are committed)
 streamlit run app/demo.py          # the live replay; needs neither the dataset nor the feature cache
+python scripts/run_followups.py    # Phase 6 follow-ups, ~1-5 min
 ```
 
 ## Features (Phase 1)
@@ -191,7 +228,7 @@ never changed by this rule, only the label on a quiet NORMAL.
 | + both detectors, scored per 10 s row (live) | 603 | 1,658× |
 | + both detectors, scoring batched (warm-up) | 159 | 6,283× |
 
-**Known issues found by the demo (for the design doc):**
+**Known issues found by the demo** (measured and fixed as a variant in Phase 6, [report](reports/phase6_followups.md)):
 
 - *Alarms right after a data gap.* For the first hour of a new segment no 6 h baseline exists, so
   the oscillation rule's scale falls back to its 0.5 bar floor and ordinary choke-pressure noise
